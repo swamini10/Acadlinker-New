@@ -36,11 +36,11 @@ const Navbar = ({ unreadNotifications = 0 }) => {
             Friends
           </Link>
         </li>
-        <li>
+        {/* <li>
           <Link to="/groups" className="hover:text-gray-300">
             Groups
           </Link>
-        </li>
+        </li> */}
         <li>
           <Link to="/create-post" className="hover:text-gray-300">
             Chat

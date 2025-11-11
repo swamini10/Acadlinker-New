@@ -5,13 +5,14 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 from app import db
-from app.models import User, Post
+from app.models import User, Post,FriendRequest
 import cloudinary.uploader
 
 profile_bp = Blueprint('profile', __name__, url_prefix='/api/profile')
 
 
 def serialize_user(user, include_posts=False):
+    # Basic info
     user_data = {
         "id": user.id,
         "full_name": user.full_name,
@@ -26,6 +27,31 @@ def serialize_user(user, include_posts=False):
         "created_at": user.created_at.isoformat(),
     }
 
+    # Friend / request status
+    is_friend = db.session.query(User).filter(
+        User.id == current_user.id,
+        User.friends.any(id=user.id)
+    ).first() is not None
+
+    request_sent = db.session.query(FriendRequest).filter_by(
+        sender_id=current_user.id,
+        receiver_id=user.id,
+        status="pending"
+    ).first() is not None
+
+    request_received = db.session.query(FriendRequest).filter_by(
+        sender_id=user.id,
+        receiver_id=current_user.id,
+        status="pending"
+    ).first() is not None
+
+    user_data.update({
+        "is_friend": is_friend,
+        "request_sent": request_sent,
+        "request_received": request_received
+    })
+
+    # Include posts if allowed
     if include_posts:
         user_data["posts"] = [
             {
@@ -40,7 +66,13 @@ def serialize_user(user, include_posts=False):
             .all()
         ]
 
+    # Privacy for non-friends
+    if current_user.id != user.id and not is_friend:
+        user_data.pop("email", None)
+        user_data.pop("mobile_no", None)
+
     return user_data
+
 
 
 def save_file(file_storage):
@@ -57,26 +89,42 @@ def save_file(file_storage):
 @profile_bp.route("/<int:user_id>", methods=["GET"])
 @login_required
 def get_profile(user_id):
-    print("Requested user_id:", user_id)
-    print("Current user_id:", current_user.id)
-    
     user = User.query.get(user_id)
     if not user:
         return jsonify({"message": "User not found"}), 404
 
-    # ✅ FIX 1: safer friend check (avoids lazy-loading bugs)
+    # Check if current user and target user are friends
     is_friend = db.session.query(User).filter(
         User.id == current_user.id,
         User.friends.any(id=user.id)
     ).first() is not None
 
-    # ✅ FIX 2: decide what to show
-    include_posts = current_user.id == user.id or is_friend
+    # Check friend requests
+    sent_request = FriendRequest.query.filter_by(sender_id=current_user.id, receiver_id=user.id, status="pending").first()
+    received_request = FriendRequest.query.filter_by(sender_id=user.id, receiver_id=current_user.id, status="pending").first()
 
-    # ✅ FIX 3: don’t leak private info if not friends
-    user_data = serialize_user(user, include_posts)
+    user_data = {
+        "id": user.id,
+        "full_name": user.full_name,
+        "email": user.email,
+        "mobile_no": user.mobile_no,
+        "location": user.location,
+        "description": user.description,
+        "skills": user.skills,
+        "education": user.education,
+        "profile_pic_url": user.profile_pic,
+        "cover_photo_url": user.cover_photo,
+        "created_at": user.created_at.isoformat(),
+        # ✅ Include friendship/request status
+        "is_friend": is_friend,
+        "request_sent": bool(sent_request),
+        "request_received": bool(received_request),
+        # If needed, include the request_id for accept/reject
+        "request_id": received_request.id if received_request else None,
+    }
+
+    # Remove private info if not friends
     if current_user.id != user.id and not is_friend:
-        # remove email/mobile for privacy
         user_data.pop("email", None)
         user_data.pop("mobile_no", None)
 

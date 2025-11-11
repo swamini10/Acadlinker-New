@@ -132,7 +132,7 @@ def list_friends():
             "id": f.id,
             "name": f.full_name,
             "email": f.email,
-            "profile_image": getattr(f, "profile_image", None)
+            "profile_image": getattr(f, "profile_pic", None)
         }
         for f in friends
     ]

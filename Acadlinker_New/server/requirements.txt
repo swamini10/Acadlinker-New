@@ -5,5 +5,3 @@ Flask-Admin
 Flask-CORS 
 Flask-Login
 Flask-Bcrypt
-python-dotenv
-cloudinary

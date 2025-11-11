@@ -5,6 +5,7 @@ import Navbar from "./components/Navbar";
 import Profile from "./pages/Profile";
 import EditProfile from "./pages/EditProfile";
 import AuthPage from "./pages/AuthPage";
+import FriendsList from "./pages/FriendsList";
 import { Loader2 } from "lucide-react";
 import SearchPage from "./pages/SearchPage"; // 1. Import the new SearchPage
 
@@ -59,6 +60,9 @@ const App = () => {
           path="/search"
           element={isAuthenticated ? <SearchPage /> : <Navigate to="/auth" />}
         />
+
+        <Route path="/friends"
+        element={isAuthenticated ? <FriendsList /> : <Navigate to="/auth" />} />
         
       </Routes>
 
