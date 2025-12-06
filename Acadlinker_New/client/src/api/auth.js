@@ -1,65 +1,80 @@
 // src/api/auth.js
-const API_ROOT = '/api/auth';
+import axios from "axios";
+
+const API_ROOT = "/api/auth"; // relative URL, use proxy
 
 class AuthServiceClass {
-  async request(endpoint, options = {}) {
-    try {
-      const response = await fetch(`${API_ROOT}${endpoint}`, {
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', ...options.headers },
-        ...options,
-      });
-
-      // Attempt to parse JSON (if backend sends it)
-      const data = await response.json().catch(() => ({}));
-      return { ok: response.ok, status: response.status, data };
-    } catch (error) {
-      console.error(`❌ Request failed: ${endpoint}`, error);
-      return { ok: false, status: 500, data: { message: 'Network error' } };
-    }
+  constructor() {
+    this.client = axios.create({
+      baseURL: API_ROOT,
+      withCredentials: true, // send cookies automatically
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
   }
 
   async checkStatus() {
-    const res = await this.request('/status');
-    return {
-      isAuthenticated: res.ok && res.data.is_logged_in,
-      user: res.data.user || null,
-    };
+    try {
+      const res = await this.client.get("/status");
+      return {
+        isAuthenticated: res.status === 200 && res.data.is_logged_in,
+        user: res.data.user || null,
+      };
+    } catch (err) {
+      console.error("❌ Status check failed:", err.response?.data || err);
+      return { isAuthenticated: false, user: null };
+    }
   }
 
   async login(credentials) {
-    console.log('🔑 LOGIN REQUEST:', credentials);
-    const res = await this.request('/login', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-    });
-    console.log('✅ LOGIN RESPONSE:', res);
-    return {
-      success: res.ok,
-      message: res.data.message,
-      user: res.data.user,
-    };
+    try {
+      console.log("🔑 LOGIN REQUEST:", credentials);
+      const res = await this.client.post("/login", credentials);
+      console.log("✅ LOGIN RESPONSE:", res.data);
+      return {
+        success: res.status === 200,
+        message: res.data.message,
+        user: res.data.user,
+      };
+    } catch (err) {
+      console.error("❌ LOGIN FAILED:", err.response?.data || err);
+      return {
+        success: false,
+        message: err.response?.data?.message || "Login failed",
+        user: null,
+      };
+    }
   }
 
   async register(userData) {
-    console.log('📝 REGISTER REQUEST DATA:', userData);
-    const res = await this.request('/register', {
-      method: 'POST',
-      body: JSON.stringify(userData),
-    });
-    console.log('✅ REGISTER RESPONSE:', res);
-    return {
-      success: res.ok,
-      message: res.data.message,
-    };
+    try {
+      console.log("📝 REGISTER REQUEST DATA:", userData);
+      const res = await this.client.post("/register", userData);
+      console.log("✅ REGISTER RESPONSE:", res.data);
+      return {
+        success: res.status === 200,
+        message: res.data.message,
+      };
+    } catch (err) {
+      console.error("❌ REGISTER FAILED:", err.response?.data || err);
+      return {
+        success: false,
+        message: err.response?.data?.message || "Registration failed",
+      };
+    }
   }
 
   async logout() {
-    const res = await this.request('/logout', { method: 'POST' });
-    return res.ok;
+    try {
+      const res = await this.client.post("/logout");
+      return res.status === 200;
+    } catch (err) {
+      console.error("❌ LOGOUT FAILED:", err.response?.data || err);
+      return false;
+    }
   }
 }
 
-// ✅ Export as a single instance — no `this` context lost anymore
 const AuthService = new AuthServiceClass();
 export default AuthService;

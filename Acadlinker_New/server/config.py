@@ -8,6 +8,14 @@ class Config:
     SQLALCHEMY_DATABASE_URI = 'sqlite:///site.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # For development over HTTP
+    SESSION_COOKIE_SAMESITE = "Lax"  # easier for dev
+    SESSION_COOKIE_SECURE = False    # must be False for HTTP
+    REMEMBER_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_SECURE = False
+
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "*")   # for CORS
+
     # Cloudinary credentials
     CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
     CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY")

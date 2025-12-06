@@ -47,7 +47,7 @@ class Post(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     title = db.Column(db.String(120))
     description = db.Column(db.Text)
-    file_name = db.Column(db.String(100))
+    file_name = db.Column(db.String(300))
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship('User', backref=db.backref('posts', lazy='dynamic'))

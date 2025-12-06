@@ -5,16 +5,24 @@ from flask_login import LoginManager
 from flask_bcrypt import Bcrypt
 from config import Config
 import cloudinary
-
+from flask_cors import CORS
 
 db = SQLAlchemy()
 migrate = Migrate()
 bcrypt = Bcrypt()
 login_manager = LoginManager()
 
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+
+    
+    CORS(
+        app,
+        origins=[app.config["FRONTEND_URL"]],
+        supports_credentials=True
+    )
 
     # Initialize extensions with the application instance
     db.init_app(app)
@@ -55,6 +63,13 @@ def create_app():
 
     from app.search.routes import search_bp
     app.register_blueprint(search_bp)
+
+    from app.suggestions.routes import suggestions_bp
+    app.register_blueprint(suggestions_bp, url_prefix='/api/suggestions')
+
+    from app.posts.routes import posts_bp
+    app.register_blueprint(posts_bp, url_prefix='/api/posts')
+
     # =================================================================
     # Register Backend Admin Interface
     # =================================================================

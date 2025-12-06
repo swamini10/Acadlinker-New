@@ -6,6 +6,7 @@ import Profile from "./pages/Profile";
 import EditProfile from "./pages/EditProfile";
 import AuthPage from "./pages/AuthPage";
 import FriendsList from "./pages/FriendsList";
+import Home from "./pages/Home";
 import { Loader2 } from "lucide-react";
 import SearchPage from "./pages/SearchPage"; // 1. Import the new SearchPage
 
@@ -27,15 +28,10 @@ const App = () => {
       <Routes>
         {/* 🔹 Default redirect to logged-in user's profile */}
         <Route
-          path="/"
-          element={
-            isAuthenticated ? (
-              <Navigate to={`/profile/${currentUser?.id}`} />
-            ) : (
-              <Navigate to="/auth" />
-            )
-          }
-        />
+  path="/"
+  element={isAuthenticated ? <Home /> : <Navigate to="/auth" />}
+/>
+
 
         {/* 🔹 User profile */}
         <Route

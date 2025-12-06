@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import UserPosts from "../components/UserPosts";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
 
@@ -221,41 +222,14 @@ const Profile = () => {
 
           {/* RIGHT: Posts */}
           <div className="md:col-span-1 space-y-6">
-            <div className="bg-white p-6 rounded-xl shadow-lg">
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Recent Posts</h3>
-            </div>
+            <div className="md:col-span-1">
+  <div className="bg-white p-6 rounded-xl shadow-lg mb-4">
+    <h3 className="text-xl font-bold text-gray-900">Recent Posts</h3>
+  </div>
 
-            {userPosts.length > 0 ? (
-              userPosts.map((post) => (
-                <div key={post.id} className="bg-white border border-gray-200 rounded-xl shadow-md overflow-hidden">
-                  <div className="p-4">
-                    <h5 className="text-lg font-semibold text-gray-800">{post.title}</h5>
-                    <p className="text-gray-700 mt-1 mb-3">{post.description}</p>
-                  </div>
-
-                  {post.file_name && (
-                    ["jpg", "jpeg", "png", "gif"].includes(post.file_name.split(".").pop().toLowerCase()) ? (
-                      <img src={`/uploads/${post.file_name}`} alt="Post" className="w-full h-auto max-h-96 object-cover" />
-                    ) : (
-                      <div className="px-4 pb-4">
-                        <a href={`/uploads/${post.file_name}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-lg text-indigo-600 hover:bg-indigo-100 transition">
-                          📎 <span className="font-medium">Download File</span>
-                        </a>
-                      </div>
-                    )
-                  )}
-
-                  <div className="border-t border-gray-100 px-4 py-2">
-                    <small className="text-gray-500">{new Date(post.timestamp).toLocaleString()}</small>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="bg-white p-6 rounded-xl shadow-lg">
-                <p className="text-gray-500 text-center py-10">No posts yet.</p>
-              </div>
-            )}
-          </div>
+  <UserPosts userId={userId} isCurrentUser={isCurrentUser} />
+</div>
+</div>
         </div>
       </div>
     </div>
