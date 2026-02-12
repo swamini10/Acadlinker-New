@@ -1,6 +1,6 @@
 // src/pages/EditProfile.jsx
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../api/axios'; 
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -27,20 +27,35 @@ const EditProfile = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setMsg(''); 
 
     const data = new FormData();
-    Object.entries(form).forEach(([key, value]) => data.append(key, value));
+    
+    // --- CORRECTED LOGIC ---
+    Object.entries(form).forEach(([key, value]) => {
+        // We append the value OR an empty string. 
+        // This ensures the key is always sent, so the backend can update it.
+        data.append(key, value || ""); 
+    });
+    
     if (profilePic) data.append('profile_pic', profilePic);
     if (coverPhoto) data.append('cover_photo', coverPhoto);
 
     try {
-      await axios.patch('/api/profile/edit', data, { withCredentials: true });
+      // API call using interceptor
+      await api.patch('/api/profile/edit', data);
+      
       setMsg('✅ Profile updated successfully!');
+      
+      // Refresh context so the new data shows up instantly in the UI
       await refreshUser();
+      
+      // Navigate back to profile
       setTimeout(() => navigate(`/profile/${currentUser.id}`), 1200);
+      
     } catch (err) {
-      console.error(err);
-      setMsg('❌ Failed to update profile.');
+      console.error("Profile update error:", err);
+      setMsg('❌ Failed to update profile. Please try again.');
     }
   };
 
@@ -63,16 +78,15 @@ const EditProfile = () => {
             />
           </div>
 
-          {/* Email */}
+          {/* Email (Read Only recommended) */}
           <div>
             <label className="block font-medium text-gray-700 mb-1">Email</label>
             <input
               type="email"
               name="email"
               value={form.email}
-              onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              placeholder="Enter your email"
+              readOnly // Prevent editing email since it's the login ID
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100 text-gray-500 cursor-not-allowed focus:outline-none"
             />
           </div>
 
@@ -145,6 +159,7 @@ const EditProfile = () => {
             <label className="block font-medium text-gray-700 mb-1">Profile Picture</label>
             <input
               type="file"
+              accept="image/*"
               onChange={(e) => setProfilePic(e.target.files[0])}
               className="w-full border border-gray-300 rounded-lg px-3 py-2"
             />
@@ -155,6 +170,7 @@ const EditProfile = () => {
             <label className="block font-medium text-gray-700 mb-1">Cover Photo</label>
             <input
               type="file"
+              accept="image/*"
               onChange={(e) => setCoverPhoto(e.target.files[0])}
               className="w-full border border-gray-300 rounded-lg px-3 py-2"
             />

@@ -1,79 +1,81 @@
+import os
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from flask_login import LoginManager
-from flask_bcrypt import Bcrypt
-from config import Config
-import cloudinary
 from flask_cors import CORS
+import cloudinary
 
-db = SQLAlchemy()
-migrate = Migrate()
-bcrypt = Bcrypt()
-login_manager = LoginManager()
-
+# Import both configs
+from config import DevelopmentConfig, ProductionConfig 
+from app.extensions import db, migrate, bcrypt, login_manager
 
 def create_app():
     app = Flask(__name__)
-    app.config.from_object(Config)
 
+    # --- 🛠️ FIX 1: AUTO-DETECT ENVIRONMENT ---
+    env = os.getenv('FLASK_ENV', 'development')
+    if env == 'production':
+        app.config.from_object(ProductionConfig)
+    else:
+        app.config.from_object(DevelopmentConfig)
+
+    # --- 🛠️ FIX 2: EXPLICIT CORS ---
+    frontend_url = os.getenv("FRONTEND_URL", "https://acadlinker-student-networking-h91v5ddoh-sumit-bholes-projects.vercel.app")
     
     CORS(
         app,
-        origins=[app.config["FRONTEND_URL"]],
-        supports_credentials=True
+        origins=[frontend_url, "http://localhost:5173"],
+        supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     )
 
-    # Initialize extensions with the application instance
+    # Initialize Extensions
     db.init_app(app)
     migrate.init_app(app, db)
     bcrypt.init_app(app)
     login_manager.init_app(app)
 
-     # Initialize Cloudinary (only if using cloud provider)
-    if app.config['UPLOAD_PROVIDER'] == 'cloudinary':
+    # Cloudinary configuration
+    if app.config.get("UPLOAD_PROVIDER") == "cloudinary":
         cloudinary.config(
-            cloud_name=app.config['CLOUDINARY_CLOUD_NAME'],
-            api_key=app.config['CLOUDINARY_API_KEY'],
-            api_secret=app.config['CLOUDINARY_API_SECRET']
+            cloud_name=app.config["CLOUDINARY_CLOUD_NAME"],
+            api_key=app.config["CLOUDINARY_API_KEY"],
+            api_secret=app.config["CLOUDINARY_API_SECRET"]
         )
-    
-    # =================================================================
-    # Register API Blueprints (Only implemented blueprints kept)
-    # =================================================================
 
-    # Main Blueprint: Handles the root path (/)
-    # It has NO url_prefix, so it catches requests to '/'
-    from app.main.routes import main_bp
-    app.register_blueprint(main_bp) 
+    # Register Blueprints
+    register_blueprints(app)
 
-    # Authentication API (e.g., /api/auth/register, /api/auth/login)
-    from app.auth.routes import auth_bp
-    app.register_blueprint(auth_bp, url_prefix='/api/auth')
-
-    # Profile API (e.g., /api/profile/123, /api/profile/edit)
-    from app.profile.routes import profile_bp
-    app.register_blueprint(profile_bp, url_prefix='/api/profile')
-
-    from app.friends.routes import friends_bp
-    app.register_blueprint(friends_bp, url_prefix='/api/friends')
-
-    from app.notifications.routes import notifications_bp
-    app.register_blueprint(notifications_bp, url_prefix='/api/notifications')
-
-    from app.search.routes import search_bp
-    app.register_blueprint(search_bp)
-
-    from app.suggestions.routes import suggestions_bp
-    app.register_blueprint(suggestions_bp, url_prefix='/api/suggestions')
-
-    from app.posts.routes import posts_bp
-    app.register_blueprint(posts_bp, url_prefix='/api/posts')
-
-    # =================================================================
-    # Register Backend Admin Interface
-    # =================================================================
+    # Admin Panel
     from app.admin import init_admin
-    init_admin(app, db) 
+    init_admin(app, db)
+
+    # --- 🛠️ FIX 3: GLOBAL CORS HEADER OVERRIDE ---
+    # This must be INSIDE create_app
+    @app.after_request
+    def add_cors_headers(response):
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
 
     return app
+
+def register_blueprints(app):
+    from app.routes.auth_routes import auth_bp
+    from app.routes.friend_routes import friends_bp
+    from app.routes.message_routes import messages_bp
+    from app.routes.post_routes import posts_bp
+    from app.routes.profile_routes import profile_bp
+    from app.routes.search_routes import search_bp
+    from app.routes.suggestion_routes import suggestions_bp
+    from app.routes.main_routes import main_bp
+    # from app.routes.notification_routes import notifications_bp 
+    from app.routes.help_routes import help_bp
+    app.register_blueprint(help_bp)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(friends_bp)
+    app.register_blueprint(messages_bp)
+    app.register_blueprint(posts_bp)
+    app.register_blueprint(profile_bp)
+    app.register_blueprint(search_bp)
+    app.register_blueprint(suggestions_bp)
+    app.register_blueprint(main_bp)
+    # app.register_blueprint(notifications_bp)

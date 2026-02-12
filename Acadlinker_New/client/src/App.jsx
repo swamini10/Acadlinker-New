@@ -7,8 +7,12 @@ import EditProfile from "./pages/EditProfile";
 import AuthPage from "./pages/AuthPage";
 import FriendsList from "./pages/FriendsList";
 import Home from "./pages/Home";
+import ChatApp from "./pages/chat";
+import NotificationsPage from './pages/NotificationsPage';
+import SearchPage from "./pages/SearchPage";
+import HelpDetails from "./pages/HelpDetails"; // 👈 Import
+import HelpFeedPage from "./pages/HelpFeedPage"; // 👈 Import this
 import { Loader2 } from "lucide-react";
-import SearchPage from "./pages/SearchPage"; // 1. Import the new SearchPage
 
 const App = () => {
   const { isAuthenticated, loading, currentUser } = useAuth();
@@ -24,14 +28,19 @@ const App = () => {
 
   return (
     <BrowserRouter>
-      <Navbar />
+      {isAuthenticated && <Navbar />} {/* Optional: Hide Navbar if not logged in */}
+      
       <Routes>
-        {/* 🔹 Default redirect to logged-in user's profile */}
+        {/* 🔹 Default redirect */}
         <Route
-  path="/"
-  element={isAuthenticated ? <Home /> : <Navigate to="/auth" />}
-/>
+          path="/"
+          element={isAuthenticated ? <Home /> : <Navigate to="/auth" />}
+        />
 
+        <Route 
+          path="/notifications" 
+          element={isAuthenticated ? <NotificationsPage /> : <Navigate to="/auth" />} 
+        />
 
         {/* 🔹 User profile */}
         <Route
@@ -48,22 +57,46 @@ const App = () => {
         {/* 🔹 Auth page */}
         <Route
           path="/auth"
-          element={!isAuthenticated ? <AuthPage /> : <Navigate to={`/profile/${currentUser?.id}`} />}
+          element={!isAuthenticated ? <AuthPage /> : <Navigate to="/" />}
         />
 
-        {/* 2. ADD THE NEW SEARCH ROUTE */}
+        {/* 🔹 Search */}
         <Route
           path="/search"
           element={isAuthenticated ? <SearchPage /> : <Navigate to="/auth" />}
         />
 
-        <Route path="/friends"
-        element={isAuthenticated ? <FriendsList /> : <Navigate to="/auth" />} />
+        {/* 🔹 Friends */}
+        <Route 
+          path="/friends"
+          element={isAuthenticated ? <FriendsList /> : <Navigate to="/auth" />} 
+        />
+
+        {/* 🔹 Chat */}
+        <Route
+          path="/chat"
+          element={isAuthenticated ? <ChatApp /> : <Navigate to="/auth" />}
+        />
         
+        {/* 🔹 Chat (Specific User) - Optional if you have this route */}
+        <Route
+          path="/chat/:userId"
+          element={isAuthenticated ? <ChatApp /> : <Navigate to="/auth" />}
+        />
+
+        {/* 🔹 Help Feed (View All) */}
+      <Route 
+        path="/help/feed" 
+        element={isAuthenticated ? <HelpFeedPage /> : <Navigate to="/auth" />} 
+      />
+
+        {/* 🔹 HELP DETAILS (Protected Now) */}
+        <Route 
+          path="/help/:requestId" 
+          element={isAuthenticated ? <HelpDetails /> : <Navigate to="/auth" />} 
+        />
+
       </Routes>
-
-      
-
     </BrowserRouter>
   );
 };

@@ -1,81 +1,115 @@
-// src/contexts/AuthContext.jsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
-import AuthService from '../api/auth';
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { supabase } from "../supabaseClient";
+import AuthService from "../api/auth";
+import api from "../api/axios"; 
 
 const AuthContext = createContext();
+
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [isAuthenticated, setAuth] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // --- Refresh auth status using backend API ---
-  const refresh = async () => {
-    setLoading(true);
-    const { isAuthenticated, user } = await AuthService.checkStatus();
-    setAuth(isAuthenticated);
-    setCurrentUser(user);
-    setLoading(false);
+  // Helper to merge Supabase Auth data with Backend Profile data
+  const mergeUser = (sessionUser, backendProfile = {}) => {
+    return {
+      id: sessionUser.id,
+      email: sessionUser.email,
+      // Prefer backend data, fallback to Supabase metadata
+      full_name: backendProfile.full_name || sessionUser.user_metadata?.full_name || "User",
+      profile_pic: backendProfile.profile_pic || sessionUser.user_metadata?.avatar_url,
+      ...backendProfile // Spread remaining backend fields (skills, etc.)
+    };
   };
 
-  useEffect(() => {
-    refresh();
-  }, []);
-
-  // --- Login ---
-  const login = async (data) => {
-    console.log("🔹 Login request data:", data);
-    const result = await AuthService.login(data);
-    console.log("🔹 Login response:", result);
-    if (result.success) await refresh();
-    return result;
-  };
-
-  // --- Register (fixed with arrow function to avoid 'this' binding issue) ---
-  const register = async (data) => {
-    console.log("🟢 Register request data:", data);
-    const result = await AuthService.register(data);
-    console.log("🟢 Register response:", result);
-    if (result.success) await refresh();
-    return result;
-  };
-
-  // --- Refresh only the user details (used after profile edit) ---
   const refreshUser = async () => {
     try {
-      const res = await axios.get('/api/auth/status', { withCredentials: true });
-      if (res.data.user) {
-        setCurrentUser(res.data.user);
-        setAuth(true);
-      } else {
+      // 1. Check Supabase Session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.user) {
+        setIsAuthenticated(false);
         setCurrentUser(null);
-        setAuth(false);
+        setLoading(false); // Stop loading immediately
+        return;
       }
-    } catch (err) {
-      console.error('Error refreshing user:', err);
+
+      // 2. Set Basic User (So the app loads INSTANTLY)
+      const basicUser = mergeUser(session.user);
+      setCurrentUser(basicUser);
+      setIsAuthenticated(true);
+      setLoading(false); // <--- UNBLOCK THE UI HERE
+
+      // 3. Fetch Full Profile in Background
+      console.log("🔄 Fetching full profile from backend...");
+      try {
+        const response = await api.get(`/api/profile/${session.user.id}`);
+        console.log("✅ Backend profile loaded");
+        // Update state with full details
+        setCurrentUser(prev => mergeUser(session.user, response.data));
+      } catch (backendErr) {
+        console.error("⚠️ Backend fetch failed (using basic profile):", backendErr);
+      }
+
+    } catch (error) {
+      console.error("Auth Check Error:", error);
+      setIsAuthenticated(false);
       setCurrentUser(null);
-      setAuth(false);
+      setLoading(false);
     }
   };
 
-  // --- Logout ---
+  useEffect(() => {
+    refreshUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            // Re-run the fetch logic
+            refreshUser();
+        } else if (event === 'SIGNED_OUT') {
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+          setLoading(false);
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const login = async (data) => await AuthService.login(data);
+  const register = async (data) => await AuthService.register(data);
+  const loginWithGoogle = async () => await AuthService.loginWithGoogle();
   const logout = async () => {
     await AuthService.logout();
-    setAuth(false);
+    setIsAuthenticated(false);
     setCurrentUser(null);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider
       value={{
         isAuthenticated,
         currentUser,
-        refreshUser,
         loading,
+        refreshUser,
         login,
         register,
+        loginWithGoogle,
         logout,
       }}
     >

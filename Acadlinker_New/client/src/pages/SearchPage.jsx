@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import axios from "axios";
+// --- CRITICAL FIX: Use 'api' instead of 'axios' ---
+import api from "../api/axios"; 
 import { Loader2 } from "lucide-react";
 
 const SearchPage = () => {
@@ -22,20 +23,20 @@ const SearchPage = () => {
     const fetchResults = async () => {
       setLoading(true);
       try {
-        // --- This is the backend call you need to create ---
-        // It's expecting an array of user objects in response
-        const res = await axios.get(`/api/search?q=${encodeURIComponent(query)}`);
+        // --- CRITICAL FIX: Use 'api.get' ---
+        // This automatically adds the "Authorization: Bearer <token>" header
+        const res = await api.get(`/api/search?q=${encodeURIComponent(query)}`);
         setResults(res.data);
       } catch (err) {
         console.error("Error fetching search results:", err);
-        setResults([]); // Set to empty array on error
+        setResults([]); 
       } finally {
         setLoading(false);
       }
     };
 
     fetchResults();
-  }, [query]); // This effect re-runs every time the 'query' in the URL changes
+  }, [query]); 
 
   // 1. Show a loading spinner
   if (loading) {
@@ -55,24 +56,34 @@ const SearchPage = () => {
 
       {results.length > 0 ? (
         <div className="space-y-4">
-          {/* Here we map over the results and show a "profile card" for each */}
           {results.map((user) => (
             <Link
               key={user.id}
               to={`/profile/${user.id}`}
-              className="block bg-white p-4 rounded-lg shadow-md hover:shadow-lg transition"
+              className="block bg-white p-4 rounded-lg shadow-md hover:shadow-lg transition border border-gray-100"
             >
               <div className="flex items-center space-x-4">
                 <img
-                  src={user.profile_pic_url || "/default-profile.png"}
+                  src={user.profile_pic_url || "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png"}
                   alt={user.full_name}
-                  className="w-16 h-16 rounded-full object-cover"
+                  className="w-16 h-16 rounded-full object-cover border-2 border-indigo-100"
                 />
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900">{user.full_name}</h3>
-                  <p className="text-gray-600">{user.email}</p>
-                  {user.location && (
-                    <p className="text-gray-500 text-sm mt-1">{user.location}</p>
+                  <div className="flex items-center space-x-2 text-sm text-gray-500">
+                     <span>{user.email}</span>
+                     {user.location && (
+                        <>
+                            <span>•</span>
+                            <span>{user.location}</span>
+                        </>
+                     )}
+                  </div>
+                  {/* Show friendship status if available */}
+                  {user.is_friend && (
+                      <span className="inline-block mt-2 px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded">
+                        Friend
+                      </span>
                   )}
                 </div>
               </div>
@@ -80,9 +91,9 @@ const SearchPage = () => {
           ))}
         </div>
       ) : (
-        // 3. Show this if no results were found
-        <div className="text-center py-20">
+        <div className="text-center py-20 bg-gray-50 rounded-xl border border-dashed border-gray-300">
           <p className="text-xl text-gray-500">No results found for "{query}".</p>
+          <p className="text-sm text-gray-400 mt-2">Try checking your spelling or searching for a different name.</p>
         </div>
       )}
     </div>

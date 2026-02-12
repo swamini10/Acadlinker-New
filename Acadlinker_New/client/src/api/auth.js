@@ -1,78 +1,87 @@
 // src/api/auth.js
-import axios from "axios";
-
-const API_ROOT = "/api/auth"; // relative URL, use proxy
+import { supabase } from "../supabaseClient";
 
 class AuthServiceClass {
-  constructor() {
-    this.client = axios.create({
-      baseURL: API_ROOT,
-      withCredentials: true, // send cookies automatically
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-  }
-
-  async checkStatus() {
+  
+  // 1. Login with Email/Password
+  async login({ email, password }) {
     try {
-      const res = await this.client.get("/status");
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
       return {
-        isAuthenticated: res.status === 200 && res.data.is_logged_in,
-        user: res.data.user || null,
+        success: true,
+        user: data.user,
+        session: data.session,
+        message: "Login successful",
       };
     } catch (err) {
-      console.error("❌ Status check failed:", err.response?.data || err);
-      return { isAuthenticated: false, user: null };
-    }
-  }
-
-  async login(credentials) {
-    try {
-      console.log("🔑 LOGIN REQUEST:", credentials);
-      const res = await this.client.post("/login", credentials);
-      console.log("✅ LOGIN RESPONSE:", res.data);
-      return {
-        success: res.status === 200,
-        message: res.data.message,
-        user: res.data.user,
-      };
-    } catch (err) {
-      console.error("❌ LOGIN FAILED:", err.response?.data || err);
+      console.error("❌ LOGIN FAILED:", err.message);
       return {
         success: false,
-        message: err.response?.data?.message || "Login failed",
+        message: err.message || "Login failed",
         user: null,
       };
     }
   }
 
-  async register(userData) {
+  // 2. Register (Pass full_name so the DB trigger can use it)
+  async register({ email, password, full_name, mobile_no }) {
     try {
-      console.log("📝 REGISTER REQUEST DATA:", userData);
-      const res = await this.client.post("/register", userData);
-      console.log("✅ REGISTER RESPONSE:", res.data);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: full_name,
+            mobile_no: mobile_no, // Stored in metadata
+          },
+        },
+      });
+
+      if (error) throw error;
+
       return {
-        success: res.status === 200,
-        message: res.data.message,
+        success: true,
+        user: data.user,
+        message: "Registration successful! Please check your email.",
       };
     } catch (err) {
-      console.error("❌ REGISTER FAILED:", err.response?.data || err);
+      console.error("❌ REGISTER FAILED:", err.message);
       return {
         success: false,
-        message: err.response?.data?.message || "Registration failed",
+        message: err.message || "Registration failed",
       };
     }
   }
 
-  async logout() {
+  // 3. Login with Google (New!)
+  async loginWithGoogle() {
     try {
-      const res = await this.client.post("/logout");
-      return res.status === 200;
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+      });
+      if (error) throw error;
+      return { success: true };
     } catch (err) {
-      console.error("❌ LOGOUT FAILED:", err.response?.data || err);
-      return false;
+      return { success: false, message: err.message };
     }
+  }
+
+  // 4. Logout
+  async logout() {
+    const { error } = await supabase.auth.signOut();
+    return !error;
+  }
+
+  // 5. Get Current User (No server call needed)
+  async getCurrentUser() {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.user || null;
   }
 }
 
