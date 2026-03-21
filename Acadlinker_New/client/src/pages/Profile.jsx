@@ -292,8 +292,8 @@ const Profile = () => {
                     fullWidth={true}
                   />
                   
-                  <StatCard icon={FaUserFriends} label="Friends" value={user.friend_count || "0"} color="bg-gradient-to-r from-blue-500 to-cyan-400" />
-                  <StatCard icon={FiSend} label="Posts" value={user.post_count || "0"} color="bg-gradient-to-r from-purple-500 to-pink-400" />
+                  <StatCard icon={FaUserFriends} label="Friends" value={user.friends_count || "0"} color="bg-gradient-to-r from-blue-500 to-cyan-400" />
+                  <StatCard icon={FiSend} label="Posts" value={user.posts_count || "0"} color="bg-gradient-to-r from-purple-500 to-pink-400" />
                   <StatCard icon={FaCalendarAlt} label="Joined" value={new Date(user.created_at).toLocaleDateString('default', { month: 'short', year: 'numeric' })} color="bg-gradient-to-r from-emerald-500 to-green-400" />
                   <StatCard icon={FaGlobe} label="Location" value={user.location || "Remote"} color="bg-gradient-to-r from-amber-500 to-orange-400" />
                 </div>
@@ -382,7 +382,7 @@ const Profile = () => {
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
               <div className="border-b border-gray-200 overflow-x-auto">
                 <div className="flex min-w-max">
-                  {['posts', 'activity', 'friends', 'photos'].map((tab) => (
+                  {['posts'].map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setActiveTab(tab)}

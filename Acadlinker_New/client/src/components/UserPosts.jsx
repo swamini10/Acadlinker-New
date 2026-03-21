@@ -35,6 +35,9 @@ const UserPosts = ({ userId, isCurrentUser }) => {
   const [file, setFile] = useState(null);
   const [creating, setCreating] = useState(false);
 
+  // NEW: menu state
+  const [openMenuId, setOpenMenuId] = useState(null);
+
   // Fetch Posts
   useEffect(() => {
     if (!userId) return;
@@ -83,12 +86,31 @@ const UserPosts = ({ userId, isCurrentUser }) => {
     }
   };
 
+  // NEW: Delete Post Handler
+  const handleDeletePost = async (postId) => {
+    const confirmDelete = window.confirm("Are you sure you want to delete this post?");
+    if (!confirmDelete) return;
+
+    try {
+      await api.delete(`/api/posts/delete/${postId}`);
+
+      // remove from UI
+      setPosts((prev) => prev.filter((post) => post.id !== postId));
+      setOpenMenuId(null);
+    } catch (err) {
+      console.error("Delete failed:", err);
+      alert("Failed to delete post");
+    }
+  };
+
   // Render File Helper
   const renderFile = (rawUrl) => {
     const url = getImageUrl(rawUrl);
     if (!url) return null;
     const ext = url.split(".").pop()?.toLowerCase() || "";
-    const isImage = ["png", "jpg", "jpeg", "gif", "webp"].includes(ext) || url.includes("cloudinary");
+    const isImage =
+      ["png", "jpg", "jpeg", "gif", "webp"].includes(ext) ||
+      url.includes("cloudinary");
 
     if (isImage) {
       return (
@@ -96,8 +118,10 @@ const UserPosts = ({ userId, isCurrentUser }) => {
           <img
             src={url}
             alt="Attachment"
-            className="w-full h-auto max-h-96 object-cover" 
-            onError={(e) => { e.target.style.display = 'none'; }}
+            className="w-full h-auto max-h-96 object-cover"
+            onError={(e) => {
+              e.target.style.display = "none";
+            }}
           />
         </div>
       );
@@ -123,9 +147,8 @@ const UserPosts = ({ userId, isCurrentUser }) => {
     );
 
   return (
-    <div className="space-y-8"> {/* Increased vertical space between sections */}
-
-      {/* --- CREATE POST SECTION (Styling Improved) --- */}
+    <div className="space-y-8">
+      {/* --- CREATE POST SECTION --- */}
       {isCurrentUser && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-4 border-b border-gray-100 bg-gray-50/50">
@@ -133,9 +156,8 @@ const UserPosts = ({ userId, isCurrentUser }) => {
               Create a Post
             </h3>
           </div>
-          
+
           <form onSubmit={handleCreatePost} className="p-4 space-y-4">
-            {/* Title Input */}
             <div>
               <input
                 type="text"
@@ -147,7 +169,6 @@ const UserPosts = ({ userId, isCurrentUser }) => {
               />
             </div>
 
-            {/* Description Input */}
             <div>
               <textarea
                 placeholder="What's on your mind? Share details, code, or ideas..."
@@ -158,17 +179,16 @@ const UserPosts = ({ userId, isCurrentUser }) => {
               />
             </div>
 
-            {/* Divider */}
             <div className="h-px bg-gray-100 w-full my-2"></div>
 
-            {/* Footer Actions */}
             <div className="flex items-center justify-between pt-2">
-              {/* Custom File Input */}
               <div className="flex items-center">
-                <label 
-                  htmlFor="fileInput" 
+                <label
+                  htmlFor="fileInput"
                   className={`flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                    file ? "bg-indigo-50 text-indigo-600" : "text-gray-500 hover:bg-gray-100"
+                    file
+                      ? "bg-indigo-50 text-indigo-600"
+                      : "text-gray-500 hover:bg-gray-100"
                   }`}
                 >
                   <Image className="w-4 h-4" />
@@ -187,7 +207,6 @@ const UserPosts = ({ userId, isCurrentUser }) => {
                 />
               </div>
 
-              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={creating}
@@ -207,17 +226,21 @@ const UserPosts = ({ userId, isCurrentUser }) => {
         </div>
       )}
 
-      {/* --- POSTS LIST SECTION --- */}
+      {/* --- POSTS LIST --- */}
       {posts.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-10 bg-white rounded-2xl border border-dashed border-gray-300 text-center">
           <div className="bg-gray-50 p-4 rounded-full mb-3">
-             <Image className="w-6 h-6 text-gray-400" />
+            <Image className="w-6 h-6 text-gray-400" />
           </div>
           <p className="text-gray-500 font-medium">No posts to show yet.</p>
-          {isCurrentUser && <p className="text-gray-400 text-sm mt-1">Create your first post above!</p>}
+          {isCurrentUser && (
+            <p className="text-gray-400 text-sm mt-1">
+              Create your first post above!
+            </p>
+          )}
         </div>
       ) : (
-        <div className="space-y-6"> {/* Gap between cards */}
+        <div className="space-y-6">
           {posts.map((post) => {
             const userObj = post.user || {};
             const userName = userObj.full_name || "Unknown User";
@@ -229,7 +252,6 @@ const UserPosts = ({ userId, isCurrentUser }) => {
                 key={post.id}
                 className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden"
               >
-                {/* Post Header */}
                 <div className="px-5 py-4 flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <img
@@ -247,13 +269,33 @@ const UserPosts = ({ userId, isCurrentUser }) => {
                       </div>
                     </div>
                   </div>
-                  
-                  <button className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors">
-                    <MoreHorizontal className="w-5 h-5" />
-                  </button>
+
+                  {/* UPDATED: menu */}
+                  {isCurrentUser && (
+                    <div className="relative">
+                      <button
+                        onClick={() =>
+                          setOpenMenuId(openMenuId === post.id ? null : post.id)
+                        }
+                        className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                      >
+                        <MoreHorizontal className="w-5 h-5" />
+                      </button>
+
+                      {openMenuId === post.id && (
+                        <div className="absolute right-0 mt-2 w-28 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
+                          <button
+                            onClick={() => handleDeletePost(post.id)}
+                            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Post Body */}
                 <div className="px-5 pb-2">
                   {post.title && (
                     <h3 className="text-lg font-bold text-gray-800 mb-2 leading-tight">
@@ -267,17 +309,9 @@ const UserPosts = ({ userId, isCurrentUser }) => {
                   )}
                 </div>
 
-                {/* Attachments (Compact Container) */}
                 {post.file_url && (
-                  <div className="px-5 pb-5">
-                    {renderFile(post.file_url)}
-                  </div>
+                  <div className="px-5 pb-5">{renderFile(post.file_url)}</div>
                 )}
-                
-                {/* Optional: Footer Action Bar (Like/Comment placeholder for visual balance) */}
-                {/* <div className="px-5 py-3 border-t border-gray-50 bg-gray-50/30 flex gap-4 text-gray-500 text-sm">
-                   ... buttons here if needed ...
-                </div> */}
               </div>
             );
           })}

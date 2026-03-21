@@ -30,6 +30,10 @@ def _serialize_user(target_user, current_user_id):
     """
     Serialize User object with privacy & friendship logic
     """
+    # NEW: Calculate counts
+    friends_count = target_user.friends.count()
+    posts_count = Post.query.filter_by(user_id=target_user.id).count()
+
     user_data = {
         "id": target_user.id,
         "full_name": target_user.full_name,
@@ -43,7 +47,11 @@ def _serialize_user(target_user, current_user_id):
         "cover_photo_url": target_user.cover_photo,
         "created_at": target_user.created_at.isoformat(),
         "role": getattr(target_user, 'role', 'User'),
-        "reputation_points": getattr(target_user, 'reputation_points', 0)
+        "reputation_points": getattr(target_user, 'reputation_points', 0),
+
+        # ✅ NEW FIELDS
+        "friends_count": friends_count,
+        "posts_count": posts_count
     }
 
     # 🟢 NEW: Check for Active Help Request & Send FULL Details

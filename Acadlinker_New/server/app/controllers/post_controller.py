@@ -123,3 +123,28 @@ def get_home_feed_posts():
     )
 
     return jsonify([_serialize_post(post) for post in posts]), 200
+
+def delete_post(post_id):
+    post = Post.query.get(post_id)
+
+    if not post:
+        return jsonify({"error": "Post not found"}), 404
+
+    # Only post owner can delete
+    if post.user_id != g.user_id:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    # Delete local file if exists
+    if post.file_name and not post.file_name.startswith("http"):
+        file_path = os.path.join(
+            current_app.root_path, "static", "uploads", post.file_name
+        )
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+    db.session.delete(post)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Post deleted successfully"
+    }), 200
