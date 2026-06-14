@@ -1,12 +1,24 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useOutletContext, Link } from "react-router-dom";
 import { 
-  Github, CheckCircle, ArrowRight, UserPlus, Settings, 
-  GitBranch, Star, AlertCircle, Edit2, X, GitCommit, MessageSquare, Users 
+  CheckCircle, UserPlus, Edit2, MessageSquare, Users, Globe, Lock
 } from "lucide-react";
 import EditTeamModal from "../../components/Teams/EditTeamModal";
 import InviteModal from "../../components/Teams/InviteModal";
 import { joinRequest, respondToRequest } from "../../api/teamApi"; 
+
+// 🟢 Import our newly extracted Widgets
+import ActiveSprintWidget from "../../components/Teams/ActiveSprintWidget";
+import GitHubWidget from "../../components/Teams/GitHubWidget";
+
+const getImageUrl = (url) => {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) {
+    return url;
+  }
+  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  return `${baseUrl}/static/uploads/${url}`;
+};
 
 const TeamDashboard = () => {
   const { team, isLeader } = useOutletContext(); 
@@ -17,26 +29,8 @@ const TeamDashboard = () => {
   const [joinMsg, setJoinMsg] = useState("");
   const [requestSent, setRequestSent] = useState(false);
   
-  // GitHub State
-  const [repoData, setRepoData] = useState(null);
-  const [lastCommit, setLastCommit] = useState(null);
-
-  // Fetch GitHub Stats
-  useEffect(() => {
-    if (team?.github_repo) {
-      const cleanRepo = team.github_repo.replace("https://github.com/", "").replace(".git", "");
-      
-      fetch(`https://api.github.com/repos/${cleanRepo}`)
-        .then(res => res.json())
-        .then(data => { if(!data.message) setRepoData(data); })
-        .catch(err => console.error("GitHub fetch failed", err));
-
-      fetch(`https://api.github.com/repos/${cleanRepo}/commits?per_page=1`)
-        .then(res => res.json())
-        .then(data => { if(Array.isArray(data) && data.length > 0) setLastCommit(data[0]); })
-        .catch(err => console.error("Commit fetch failed", err));
-    }
-  }, [team]);
+  const [imageErrorNonMember, setImageErrorNonMember] = useState(false);
+  const [imageErrorMember, setImageErrorMember] = useState(false);
 
   const handleJoin = async () => {
     try {
@@ -58,8 +52,10 @@ const TeamDashboard = () => {
 
   if (!team) return <div className="p-10 text-center">Loading Team Data...</div>;
 
+  const teamPicUrl = getImageUrl(team.profile_pic);
+
   // =========================================================
-  // 1. NON-MEMBER VIEW (Redesigned with TextArea)
+  // 1. NON-MEMBER VIEW
   // =========================================================
   if (!team.is_member) {
     return (
@@ -69,11 +65,18 @@ const TeamDashboard = () => {
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
           <div className="bg-gradient-to-r from-indigo-600 to-purple-600 h-32"></div>
           <div className="px-8 pb-8 text-center relative">
-            <div className="w-24 h-24 bg-white rounded-3xl mx-auto -mt-12 flex items-center justify-center text-indigo-600 font-black text-4xl shadow-lg border-4 border-white">
-              {team.profile_pic ? (
-                <img src={team.profile_pic} className="w-full h-full object-cover rounded-2xl" alt="" />
+            <div className="w-24 h-24 bg-white rounded-3xl mx-auto -mt-12 flex items-center justify-center shadow-lg border-4 border-white overflow-hidden">
+              {!imageErrorNonMember && teamPicUrl ? (
+                <img 
+                  src={teamPicUrl} 
+                  onError={() => setImageErrorNonMember(true)}
+                  className="w-full h-full object-cover" 
+                  alt={team.name} 
+                />
               ) : (
-                team.name?.[0]
+                <div className="w-full h-full flex items-center justify-center text-indigo-600 font-black text-4xl bg-indigo-50">
+                  {team.name?.[0]?.toUpperCase()}
+                </div>
               )}
             </div>
             
@@ -90,7 +93,7 @@ const TeamDashboard = () => {
           </div>
         </div>
 
-        {/* Join Request Form (Multi-line) */}
+        {/* Join Request Form */}
         <div className="bg-white rounded-3xl border border-slate-200 shadow-lg p-8">
           {!requestSent ? (
             <div className="space-y-4">
@@ -147,7 +150,16 @@ const TeamDashboard = () => {
       <div className="bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-900 rounded-3xl p-8 text-white shadow-2xl relative overflow-hidden flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="relative z-10 flex items-center gap-6 w-full md:w-auto">
           <div className="w-20 h-20 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
-            {team.profile_pic ? <img src={team.profile_pic} alt="" className="w-full h-full object-cover" /> : <span className="text-3xl font-black">{team.name?.[0]}</span>}
+            {!imageErrorMember && teamPicUrl ? (
+              <img 
+                src={teamPicUrl} 
+                onError={() => setImageErrorMember(true)}
+                alt={team.name} 
+                className="w-full h-full object-cover" 
+              />
+            ) : (
+              <span className="text-3xl font-black">{team.name?.[0]?.toUpperCase()}</span>
+            )}
           </div>
           <div>
             <h1 className="text-3xl lg:text-4xl font-black tracking-tight">{team.name}</h1>
@@ -174,115 +186,22 @@ const TeamDashboard = () => {
         {/* === LEFT COLUMN (2 Spans) === */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Active Sprint / Tasks */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                <CheckCircle size={20} className="text-emerald-500" /> Active Sprint
-              </h3>
-              <Link to="tasks" className="text-sm font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 group">
-                View Board <ArrowRight size={16} className="group-hover:translate-x-1 transition"/>
-              </Link>
-            </div>
-            <div className="p-2">
-              {team.pending_tasks?.length > 0 ? (
-                <div className="space-y-1">
-                  {team.pending_tasks.map(task => (
-                    <div key={task.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition group cursor-pointer">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-2.5 h-2.5 rounded-full ${task.priority === 'high' ? 'bg-red-500 ring-2 ring-red-100' : 'bg-orange-400 ring-2 ring-orange-100'}`} />
-                        <span className="font-medium text-slate-700">{task.title}</span>
-                      </div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-2 py-1 rounded-md group-hover:bg-white group-hover:shadow-sm transition">
-                        {task.status.replace('_', ' ')}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-12 text-center">
-                  <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <CheckCircle size={32} className="text-slate-300" />
-                  </div>
-                  <p className="text-slate-500 text-sm font-medium">All caught up! No active tasks.</p>
-                  <Link to="tasks" className="text-indigo-600 text-xs font-bold mt-2 hover:underline">Create a task</Link>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* 🟢 Use the extracted Sprint Widget */}
+          <ActiveSprintWidget tasks={team.pending_tasks} members={team.members}/>
 
-          {/* GitHub Integration Card */}
-          <div className="bg-[#0d1117] text-[#c9d1d9] rounded-2xl border border-[#30363d] overflow-hidden shadow-lg">
-             <div className="p-4 border-b border-[#30363d] flex justify-between items-center bg-[#161b22]">
-               <h3 className="font-bold flex items-center gap-2 text-sm"><Github size={18} /> Repository</h3>
-               {team.github_repo && <span className="text-[10px] font-bold px-2 py-0.5 bg-[#238636] text-white rounded-full border border-white/10">Public</span>}
-             </div>
-             
-             <div className="p-6">
-               {team.github_repo ? (
-                 <>
-                   <div className="flex justify-between items-start mb-4">
-                     <div>
-                       <p className="text-xl font-bold text-white tracking-tight">{team.github_repo}</p>
-                       <p className="text-xs text-[#8b949e] mt-1 max-w-md">
-                         {repoData?.description || "No description provided."}
-                       </p>
-                     </div>
-                     <a href={`https://github.com/${team.github_repo}`} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-400 hover:underline">View</a>
-                   </div>
+          {/* 🟢 Use the extracted GitHub Widget */}
+          <GitHubWidget 
+            githubRepo={team.github_repo} 
+            isLeader={isLeader} 
+            onLinkRepo={() => setShowEdit(true)} 
+          />
 
-                   {/* Stats Grid */}
-                   {repoData && (
-                     <div className="flex gap-4 mb-6">
-                       <div className="flex items-center gap-1.5 text-xs font-bold text-[#8b949e]">
-                         <Star size={14} className="text-yellow-500" /> {repoData.stargazers_count}
-                       </div>
-                       <div className="flex items-center gap-1.5 text-xs font-bold text-[#8b949e]">
-                         <GitBranch size={14} className="text-blue-400" /> {repoData.forks_count}
-                       </div>
-                       <div className="flex items-center gap-1.5 text-xs font-bold text-[#8b949e]">
-                         <AlertCircle size={14} className="text-red-400" /> {repoData.open_issues_count}
-                       </div>
-                     </div>
-                   )}
-
-                   {/* Latest Commit */}
-                   {lastCommit ? (
-                     <div className="bg-[#161b22] rounded-xl p-4 border border-[#30363d] group hover:border-blue-500/50 transition cursor-pointer">
-                       <div className="flex items-center gap-2 mb-2">
-                         <GitCommit size={14} className="text-[#8b949e]" />
-                         <span className="text-xs font-bold text-[#8b949e] uppercase tracking-wider">Latest Commit</span>
-                         <span className="ml-auto text-[10px] text-[#8b949e]">{new Date(lastCommit.commit.author.date).toLocaleDateString()}</span>
-                       </div>
-                       <p className="text-sm font-mono text-white truncate">{lastCommit.commit.message}</p>
-                       <div className="flex items-center gap-2 mt-3">
-                         <img src={lastCommit.author?.avatar_url || "/default-avatar.png"} className="w-5 h-5 rounded-full" alt="" />
-                         <span className="text-xs font-medium text-[#c9d1d9]">{lastCommit.commit.author.name}</span>
-                       </div>
-                     </div>
-                   ) : (
-                     <div className="text-xs text-[#8b949e] italic">No commit history available.</div>
-                   )}
-                 </>
-               ) : (
-                 <div className="text-center py-8">
-                   <Github size={40} className="mx-auto text-[#30363d] mb-3" />
-                   <p className="text-sm font-medium text-[#8b949e]">No Repository Linked</p>
-                   {isLeader && (
-                     <button onClick={() => setShowEdit(true)} className="mt-2 text-xs text-blue-400 hover:text-blue-300 font-bold">
-                       Connect GitHub
-                     </button>
-                   )}
-                 </div>
-               )}
-             </div>
-          </div>
         </div>
 
         {/* === RIGHT COLUMN: REQUESTS & MEMBERS === */}
         <div className="space-y-6">
           
-          {/* 🟢 JOIN REQUESTS WIDGET (Leader Only) */}
+          {/* JOIN REQUESTS WIDGET (Leader Only) */}
           {isLeader && (
             <div className="bg-white rounded-2xl border border-orange-200 shadow-sm overflow-hidden animate-in fade-in">
               <div className="p-4 bg-orange-50 border-b border-orange-100 flex justify-between items-center">
@@ -305,7 +224,11 @@ const TeamDashboard = () => {
                   team.join_requests.map(req => (
                     <div key={req.id} className="p-3 bg-white border border-orange-100 rounded-xl shadow-sm">
                       <div className="flex items-center gap-3 mb-2">
-                        <img src={req.profile_pic || "/default-avatar.png"} className="w-8 h-8 rounded-full bg-slate-200 object-cover" alt="" />
+                        <img 
+                          src={getImageUrl(req.profile_pic) || "/default-avatar.png"} 
+                          className="w-8 h-8 rounded-full bg-slate-200 object-cover" 
+                          alt="" 
+                        />
                         <div>
                           <p className="text-sm font-bold text-slate-900">{req.full_name}</p>
                           <p className="text-[10px] text-slate-400">{new Date(req.created_at).toLocaleDateString()}</p>
@@ -334,7 +257,7 @@ const TeamDashboard = () => {
               {team.members.slice(0, 5).map(m => (
                 <img 
                   key={m.user_id} 
-                  src={m.profile_pic || "/default-avatar.png"} 
+                  src={getImageUrl(m.profile_pic) || "/default-avatar.png"} 
                   className="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" 
                   alt={m.full_name} 
                   title={m.full_name}

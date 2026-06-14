@@ -1,12 +1,16 @@
 import cloudinary.uploader
 from flask import jsonify, request, g, url_for, current_app
 from werkzeug.datastructures import FileStorage
+from app.models.like import Like
+from app.models.saved_post import SavedPost
+from app.controllers.post_controller import _serialize_post
 
 from app.extensions import db
 from app.models.user import User
 from app.models.post import Post
 from app.models.friend_request import FriendRequest
-from app.models.help_request import HelpRequest 
+from app.models.help_request import HelpRequest
+from app.services.ml_service import trigger_ml_update_for_user 
 
 # -------------------------------------------------
 # Helpers (Private)
@@ -30,9 +34,13 @@ def _serialize_user(target_user, current_user_id):
     """
     Serialize User object with privacy & friendship logic
     """
-    # NEW: Calculate counts
-    friends_count = target_user.friends.count()
-    posts_count = Post.query.filter_by(user_id=target_user.id).count()
+    
+    # 🟢 SAFE COUNTING: 
+    # Because friends is lazy='dynamic', we MUST use .count()
+    friend_count = target_user.friends.count()
+    
+    # Because posts isn't a direct relationship in the User model, we query the Post table directly
+    post_count = Post.query.filter_by(user_id=target_user.id).count()
 
     user_data = {
         "id": target_user.id,
@@ -47,18 +55,15 @@ def _serialize_user(target_user, current_user_id):
         "cover_photo_url": target_user.cover_photo,
         "created_at": target_user.created_at.isoformat(),
         "role": getattr(target_user, 'role', 'User'),
-        "reputation_points": getattr(target_user, 'reputation_points', 0),
-
-        # ✅ NEW FIELDS
-        "friends_count": friends_count,
-        "posts_count": posts_count
+        "reputation_points": getattr(target_user, 'reputation_points', 0),  
+        "friend_count": friend_count,
+        "post_count": post_count
     }
 
-    # 🟢 NEW: Check for Active Help Request & Send FULL Details
+    # Check for Active Help Request & Send FULL Details
     active_req = HelpRequest.query.filter_by(user_id=target_user.id, status='open').first()
     
     if active_req:
-        # 🛠️ FIX: Resolve Image URL correctly (Cloudinary vs Local)
         req_image_url = None
         if active_req.image_url:
             if active_req.image_url.startswith("http"):
@@ -72,7 +77,7 @@ def _serialize_user(target_user, current_user_id):
             "description": active_req.description,
             "github_link": active_req.github_link,
             "tags": active_req.tags,
-            "image_url": req_image_url, # 👈 Now correctly populated
+            "image_url": req_image_url, 
             "created_at": active_req.created_at.isoformat()
         }
     else:
@@ -122,41 +127,6 @@ def _serialize_user(target_user, current_user_id):
         user_data.pop("mobile_no", None)
 
     return user_data
-
-# ==========================================
-#  NEW HELPER: Serialize Post (Shared Logic)
-# ==========================================
-def _serialize_post(post):
-    """
-    Ensures post data structure matches what Frontend expects (Home Feed style).
-    """
-    image_url = None
-    if post.file_name:
-        if post.file_name.startswith("http"):
-            image_url = post.file_name
-        else:
-            # Generate full URL for local files
-            image_url = url_for("static", filename=f"uploads/{post.file_name}", _external=True)
-
-    user_data = {
-        "id": post.user.id,
-        "full_name": post.user.full_name,
-        "profile_pic_url": post.user.profile_pic or "/default-profile.png"
-    } if post.user else {
-        "id": "unknown",
-        "full_name": "Unknown User",
-        "profile_pic_url": "/default-profile.png"
-    }
-
-    return {
-        "id": post.id,
-        "title": post.title,
-        "description": post.description,
-        "file_url": image_url, 
-        "created_at": post.timestamp.isoformat() if post.timestamp else None,
-        "user": user_data 
-    }
-
 # -------------------------------------------------
 # Controller Actions
 # -------------------------------------------------
@@ -186,13 +156,26 @@ def get_profile_posts(user_id):
     if not target_user:
         return jsonify({"message": "User not found"}), 404
 
-    posts = (
-        Post.query.filter_by(user_id=target_user.id)
+    # Use the same N+1 Elimination strategy for the profile feed
+    is_liked_subq = db.session.query(Like.id).filter(Like.post_id == Post.id, Like.user_id == g.user_id).exists()
+    is_saved_subq = db.session.query(SavedPost.id).filter(SavedPost.post_id == Post.id, SavedPost.user_id == g.user_id).exists()
+
+    posts_query = (
+        db.session.query(
+            Post,
+            is_liked_subq.label('is_liked'),
+            is_saved_subq.label('is_saved')
+        )
+        .filter(Post.user_id == target_user.id)
         .order_by(Post.timestamp.desc())
         .all()
     )
 
-    return jsonify([_serialize_post(p) for p in posts]), 200
+    # 🚨 Make sure you import the _serialize_post from your updated post.py controller!
+    # e.g., from app.controllers.post import _serialize_post
+    from .post_controller import _serialize_post # Adjust this import path to match your folder structure
+
+    return jsonify([_serialize_post(post, is_liked, is_saved) for post, is_liked, is_saved in posts_query]), 200
 
 def update_user_profile():
     # 1. Fetch User
@@ -203,6 +186,11 @@ def update_user_profile():
     data = request.form
 
     # 3. EXPLICIT UPDATE LOGIC
+
+    # Handle removing the DP from the frontend
+    if request.form.get("remove_profile_pic") == "true":
+        current_user.profile_pic = None
+
     if "full_name" in data:
         current_user.full_name = data["full_name"]
     
@@ -237,6 +225,10 @@ def update_user_profile():
         # 5. Commit and Refresh
         db.session.commit()
         db.session.refresh(current_user) 
+
+        # 🚀 FIRE AND FORGET THE ML ENGINE
+        # This runs silently in the background. The user gets their response instantly.
+        trigger_ml_update_for_user(current_user.id)
         
         return jsonify({
             "message": "Profile updated successfully",

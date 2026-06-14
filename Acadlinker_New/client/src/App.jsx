@@ -21,7 +21,7 @@ import CreateTeam from "./pages/Teams/CreateTeam";
 import MyTeams from "./pages/Teams/MyTeams";
 import TeamDashboard from "./pages/Teams/TeamDashboard";
 import TeamMembers from "./pages/Teams/TeamMembers";
-
+import SavedPosts from "./pages/SavedPosts";
 // 🆕 COMPONENT WRAPPERS
 // These wrap the components to pass the ID from the URL automatically
 import TeamChat from "./components/Teams/TeamChat";
@@ -60,6 +60,11 @@ const App = () => {
           element={isAuthenticated ? <Home /> : <Navigate to="/auth" />}
         />
 
+        <Route
+          path="/login"
+          element={isAuthenticated ? <Profile /> : <Navigate to="/auth" />}
+        />
+
         <Route 
           path="/notifications" 
           element={isAuthenticated ? <NotificationsPage /> : <Navigate to="/auth" />} 
@@ -94,6 +99,8 @@ const App = () => {
           path="/friends"
           element={isAuthenticated ? <FriendsList /> : <Navigate to="/auth" />} 
         />
+
+        <Route path="/saved" element={isAuthenticated ? <SavedPosts /> : <Navigate to="/auth" />} />
 
         {/* 🔹 Chat */}
         <Route

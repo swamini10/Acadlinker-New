@@ -1,151 +1,192 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import UserPosts from "../components/UserPosts";
+import ProfileSidebar from "../components/ProfileSidebar"; 
 import { useParams, Link } from "react-router-dom";
 import AskHelpCard from "../components/AskHelpCard";
-import api from "../api/axios";
+import CreatableSelect from 'react-select/creatable';
 import {
-  FaEnvelope,
-  FaPhone,
-  FaGraduationCap,
-  FaLink,
-  FaCalendarAlt,
-  FaUserFriends,
   FaCheck,
   FaPlus,
   FaComment,
-  FaEdit,
-  FaGlobe,
-  FaBriefcase,
-  FaTrophy // 👈 ADDED: Trophy icon for RP
+  FaTrash,
+  FaEdit
 } from "react-icons/fa";
-import { FiSend, FiClock } from "react-icons/fi";
+import { FiClock } from "react-icons/fi";
+import { Mail, Phone, MapPin, X } from "lucide-react";
+
+// 🟢 IMPORT YOUR NEW CONSTANTS AND HOOKS HERE
+import { SKILL_OPTIONS, LOCATION_OPTIONS, EDUCATION_OPTIONS } from "../utils/constants"; 
+import { useProfileQuery, useUpdateProfileMutation, useFriendActionsMutation } from "../hooks/useProfile";
+
+// --- STYLES ---
+const customSelectStyles = {
+  control: (provided, state) => ({
+    ...provided,
+    borderRadius: '0.75rem',
+    padding: '0.2rem 0.3rem',
+    borderColor: state.isFocused ? '#6366f1' : '#e2e8f0',
+    boxShadow: state.isFocused ? '0 0 0 1px #6366f1' : 'none',
+    '&:hover': { borderColor: '#6366f1' }
+  }),
+  multiValue: (provided) => ({
+    ...provided,
+    backgroundColor: '#eef2ff',
+    borderRadius: '0.375rem',
+  }),
+  multiValueLabel: (provided) => ({
+    ...provided,
+    color: '#4338ca',
+    fontWeight: 'bold',
+    fontSize: '0.75rem',
+  }),
+  multiValueRemove: (provided) => ({
+    ...provided,
+    color: '#6366f1',
+    ':hover': {
+      backgroundColor: '#e0e7ff',
+      color: '#3730a3',
+    },
+  }),
+  menuPortal: base => ({ ...base, zIndex: 9999 })
+};
 
 const Profile = () => {
   const { currentUser } = useAuth();
   const { userId } = useParams();
 
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("posts");
-  const [processingAction, setProcessingAction] = useState(false);
+  // 🚀 REACT QUERY MAGIC: Replaces useEffect, loading state, and user state
+  const { data: user, isLoading: loading } = useProfileQuery(userId);
+  const updateProfileMutation = useUpdateProfileMutation(userId);
+  const { sendRequest, acceptRequest, rejectRequest } = useFriendActionsMutation(userId);
+
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [isBasicInfoModalOpen, setIsBasicInfoModalOpen] = useState(false);
+  const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+  const [isEditingContact, setIsEditingContact] = useState(false);
+  
+  const [tempAvatarFile, setTempAvatarFile] = useState(null);
+  const [tempAvatarPreview, setTempAvatarPreview] = useState(null);
+  const [isAvatarRemoved, setIsAvatarRemoved] = useState(false);
+
+  const [editForm, setEditForm] = useState({});
 
   const isCurrentUser = currentUser && String(currentUser.id) === String(userId);
 
-  const fetchUserData = async () => {
-    try {
-      setLoading(true);
-      const res = await api.get(`/api/profile/${userId}`);
-      setUser(res.data);
-    } catch (err) {
-      console.error("Profile fetch error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Sync form data automatically when React Query fetches the user data
   useEffect(() => {
-    if (userId) {
-      fetchUserData();
+    if (user) {
+      setEditForm({
+        full_name: user.full_name || '',
+        location: user.location || '',
+        description: user.description || '',
+        skills: user.skills || '',
+        email: user.email || '',
+        mobile_no: user.mobile_no || '', 
+        education: user.education || '',
+        website: user.website || ''
+      });
     }
-  }, [userId]);
+  }, [user]);
 
-  const sendFriendRequest = async () => {
-    try {
-      setProcessingAction(true);
-      await api.post(`/api/friends/send/${user.id}`);
-      await fetchUserData();
-    } catch (err) {
-      console.error("Failed to send request", err);
-    } finally {
-      setProcessingAction(false);
+  // Consolidate processing state for UI disable logic
+  const isProcessing = 
+    updateProfileMutation.isPending || 
+    sendRequest.isPending || 
+    acceptRequest.isPending || 
+    rejectRequest.isPending;
+
+  const handleEditChange = (e) => {
+    setEditForm({ ...editForm, [e.target.name]: e.target.value });
+  };
+
+  const submitProfileUpdate = (e) => {
+    e?.preventDefault();
+    const data = new FormData();
+    
+    Object.entries(editForm).forEach(([key, value]) => {
+      data.append(key, value || ""); 
+    });
+
+    updateProfileMutation.mutate(data, {
+      onSuccess: () => {
+        setIsBasicInfoModalOpen(false);
+        setIsSkillsModalOpen(false);
+        setIsDetailsModalOpen(false);
+        setIsEditingContact(false);
+      },
+      onError: () => alert("Failed to update profile.")
+    });
+  };
+
+  const handleAvatarFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setTempAvatarFile(file);
+      setTempAvatarPreview(URL.createObjectURL(file));
+      setIsAvatarRemoved(false);
     }
   };
 
-  const acceptFriendRequest = async () => {
-    try {
-      setProcessingAction(true);
-      await api.post(`/api/friends/accept/${user.request_id}`);
-      await fetchUserData();
-    } catch (err) {
-      console.error("Failed to accept request", err);
-    } finally {
-      setProcessingAction(false);
-    }
+  const handleAvatarRemovePreview = () => {
+    setTempAvatarFile(null);
+    setTempAvatarPreview(null);
+    setIsAvatarRemoved(true);
   };
 
-  const rejectFriendRequest = async () => {
-    try {
-      setProcessingAction(true);
-      await api.post(`/api/friends/reject/${user.request_id}`);
-      await fetchUserData();
-    } catch (err) {
-      console.error("Failed to reject request", err);
-    } finally {
-      setProcessingAction(false);
+  const saveAvatarChanges = () => {
+    const data = new FormData();
+    
+    if (tempAvatarFile) {
+      data.append('profile_pic', tempAvatarFile);
+    } else if (isAvatarRemoved) {
+      data.append('profile_pic', ''); 
+      data.append('remove_profile_pic', 'true'); 
+    } else {
+      setIsAvatarModalOpen(false);
+      return; 
     }
+
+    Object.entries(editForm).forEach(([key, value]) => {
+      data.append(key, value || ""); 
+    });
+
+    updateProfileMutation.mutate(data, {
+      onSuccess: () => setIsAvatarModalOpen(false),
+      onError: () => alert("Failed to update picture.")
+    });
   };
 
   const renderFriendButton = () => {
-    const base = "w-full px-6 py-3 rounded-xl font-medium transition-all duration-300 flex items-center justify-center gap-2 hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed";
+    const base = "px-5 py-2 rounded-xl font-bold transition-all duration-200 flex items-center justify-center gap-2 text-sm shadow-sm active:scale-95 disabled:opacity-70 disabled:pointer-events-none";
 
-    if (isCurrentUser) {
-      return (
-        <Link
-          to="/edit-profile"
-          className={`${base} bg-gradient-to-r from-blue-500 to-cyan-400 text-white hover:from-blue-600 hover:to-cyan-500`}
-        >
-          <FaEdit className="text-sm" />
-          Edit Profile
-        </Link>
-      );
-    }
+    if (isCurrentUser) return null;
 
     if (user.is_friend) {
       return (
-        <Link
-          to={`/chat/${user.id}`}
-          className={`${base} bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600`}
-        >
-          <FaComment />
-          Message
+        <Link to={`/chat/${user.id}`} className={`${base} bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100`}>
+          <FaComment /> Message
         </Link>
       );
     }
 
     if (user.request_sent) {
       return (
-        <button 
-          className={`${base} bg-gray-100 text-gray-600 border border-gray-300 cursor-not-allowed`}
-          disabled
-        >
-          <FiClock />
-          {processingAction ? "Processing..." : "Request Sent"}
+        <button className={`${base} bg-slate-50 text-slate-500 border border-slate-200 cursor-not-allowed`} disabled>
+          <FiClock /> {isProcessing ? "Processing..." : "Sent"}
         </button>
       );
     }
 
     if (user.request_received) {
       return (
-        <div className="flex gap-2 w-full justify-center">
-          <button
-            onClick={acceptFriendRequest}
-            disabled={processingAction}
-            className={`${base} bg-gradient-to-r from-emerald-500 to-green-400 text-white hover:from-emerald-600 hover:to-green-500`}
-          >
-            {processingAction ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              <>
-                <FaCheck /> Accept
-              </>
-            )}
+        <div className="flex gap-2">
+          <button onClick={() => acceptRequest.mutate(user.request_id)} disabled={isProcessing} className={`${base} bg-indigo-600 text-white border border-indigo-600 hover:bg-indigo-700 px-4`}>
+            {acceptRequest.isPending ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <><FaCheck /> Accept</>}
           </button>
-          <button
-            onClick={rejectFriendRequest}
-            disabled={processingAction}
-            className={`${base} bg-white border border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400`}
-          >
+          <button onClick={() => rejectRequest.mutate(user.request_id)} disabled={isProcessing} className={`${base} bg-white text-rose-600 border border-rose-200 hover:bg-rose-50 px-4`}>
             Reject
           </button>
         </div>
@@ -153,282 +194,342 @@ const Profile = () => {
     }
 
     return (
-      <button
-        onClick={sendFriendRequest}
-        disabled={processingAction}
-        className={`${base} bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:from-indigo-600 hover:to-purple-600`}
-      >
-        {processingAction ? (
-          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-        ) : (
-          <>
-            <FaPlus /> Add Friend
-          </>
-        )}
+      <button onClick={() => sendRequest.mutate(user.id)} disabled={isProcessing} className={`${base} bg-indigo-600 text-white border border-indigo-600 hover:bg-indigo-700 shadow-indigo-200 shadow-md`}>
+        {sendRequest.isPending ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <><FaPlus /> Connect</>}
       </button>
     );
   };
 
-  const StatCard = ({ icon: Icon, label, value, color, fullWidth = false }) => (
-    <div className={`bg-white rounded-xl p-3 border border-gray-200 hover:shadow-md transition-shadow duration-300 text-left ${fullWidth ? 'col-span-2' : ''}`}>
-      <div className="flex items-center gap-3">
-        <div className={`p-2 rounded-lg ${color}`}>
-          <Icon className="text-white text-base" />
-        </div>
-        <div>
-          <p className="text-lg font-bold text-gray-900">{value}</p>
-          <p className="text-xs text-gray-500 mt-1">{label}</p>
-        </div>
-      </div>
-    </div>
-  );
+  // 🟢 SMART LOGIC FOR INITIALS
+  const hasValidProfilePic = (url) => {
+    if (!url || typeof url !== 'string') return false;
+    if (url.includes("default")) return false;
+    return true;
+  };
+
+  const getInitials = (name) => {
+    if (!name) return "?";
+    return name.charAt(0).toUpperCase();
+  };
+
+  const handleOpenAvatarModal = () => {
+    if (isCurrentUser) {
+      setTempAvatarFile(null);
+      setTempAvatarPreview(user.profile_pic_url);
+      setIsAvatarRemoved(false);
+      setIsAvatarModalOpen(true);
+    }
+  };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="relative">
-            <div className="w-20 h-20 border-4 border-gray-200 rounded-full"></div>
-            <div className="w-20 h-20 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
-          </div>
-          <p className="mt-4 text-gray-600 font-medium">Loading profile...</p>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-slate-200 rounded-full"></div>
+          <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
         </div>
       </div>
     );
   }
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center max-w-md">
-          <div className="text-6xl mb-4">😕</div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">User not found</h2>
-          <p className="text-gray-600 mb-6">The profile you're looking for doesn't exist or has been removed.</p>
-          <Link
-            to="/"
-            className="inline-block px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl font-medium hover:shadow-lg transition-all duration-300"
-          >
-            Back to Home
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  if (!user) return null;
 
   return (
-    <div className="min-h-screen md:h-screen bg-gray-50 py-8 px-4 sm:px-6 overflow-y-auto md:overflow-hidden">
+    <div className="min-h-[calc(100vh-4rem)] md:h-[calc(100vh-4rem)] bg-slate-50 pt-0 pb-0 px-0 pr-4 lg:pr-6 overflow-y-auto md:overflow-hidden relative">
       
       <style>
         {`
-          .no-scrollbar::-webkit-scrollbar {
-            display: none;
-          }
-          .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-          }
+          .no-scrollbar::-webkit-scrollbar { display: none; }
+          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         `}
       </style>
 
-      <div className="max-w-7xl mx-auto h-full">
-        
-        <div className="flex flex-col md:flex-row gap-6 h-auto md:h-full items-start">
+      <div className="w-full max-w-[1400px] h-full ml-0">
+        <div className="flex flex-col md:flex-row gap-4 lg:gap-8 h-auto md:h-full items-start">
           
           {/* =======================
-              LEFT SIDEBAR (Profile Card)
+              🟢 MODULAR LEFT SIDEBAR 
              ======================= */}
-          <div className="w-full md:w-2/5 flex-shrink-0 h-auto md:h-[calc(100vh-4rem)] md:overflow-y-auto no-scrollbar rounded-2xl">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-              
-              {/* Cover Photo */}
-              <div className="relative h-36 bg-gradient-to-r from-gray-300 to-gray-400">
-                <img
-                  src={user.cover_photo_url || "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80"}
-                  alt="Cover"
-                  className="w-full h-full object-cover"
-                />
-                
-                <div className="absolute -bottom-16 left-1/2 transform -translate-x-1/2">
-                  <div className="relative">
-                    <div className="w-32 h-32 rounded-full border-4 border-white shadow-xl overflow-hidden bg-white">
-                      <img
-                        src={user.profile_pic_url || "/default-profile.png"}
-                        alt="Profile"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    {user.is_online && (
-                      <div className="absolute bottom-2 right-2 w-5 h-5 bg-emerald-500 border-4 border-white rounded-full"></div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Profile Content */}
-              <div className="px-6 pt-20 pb-8 text-center">
-                <div className="mb-6">
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <h1 className="text-2xl font-bold text-gray-900">{user.full_name}</h1>
-                    {user.is_verified && <FaCheck className="text-blue-500 text-sm" title="Verified" />}
-                  </div>
-                  <p className="text-gray-600 flex items-center justify-center gap-2">
-                    <FaBriefcase className="text-gray-400" />
-                    {user.role || "Member"}
-                  </p>
-                </div>
-
-                <div className="w-full max-w-xs mx-auto mb-8">
-                  {renderFriendButton()}
-                </div>
-
-                {/* 🆕 UPDATED: Stats Grid includes RP Points */}
-                <div className="grid grid-cols-2 gap-3 mb-8">
-                  {/* RP Points Card - Spans full width or fits in grid */}
-                  <StatCard 
-                    icon={FaTrophy} 
-                    label="RP Points" 
-                    value={user.rp || user.rp_points || user.reputation_points || "0"} 
-                    color="bg-gradient-to-r from-yellow-400 to-orange-500" 
-                    fullWidth={true}
-                  />
-                  
-                  <StatCard icon={FaUserFriends} label="Friends" value={user.friends_count || "0"} color="bg-gradient-to-r from-blue-500 to-cyan-400" />
-                  <StatCard icon={FiSend} label="Posts" value={user.posts_count || "0"} color="bg-gradient-to-r from-purple-500 to-pink-400" />
-                  <StatCard icon={FaCalendarAlt} label="Joined" value={new Date(user.created_at).toLocaleDateString('default', { month: 'short', year: 'numeric' })} color="bg-gradient-to-r from-emerald-500 to-green-400" />
-                  <StatCard icon={FaGlobe} label="Location" value={user.location || "Remote"} color="bg-gradient-to-r from-amber-500 to-orange-400" />
-                </div>
-
-                <hr className="border-gray-100 mb-8" />
-
-                <div className="mb-8 text-left">
-                  <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                    <FaUserFriends className="text-indigo-500" /> About
-                  </h3>
-                  <p className="text-gray-600 text-sm leading-relaxed">
-                    {user.description || "This user hasn't shared anything about themselves yet."}
-                  </p>
-                </div>
-
-                <div className="mb-8 text-left">
-                  <h3 className="text-lg font-bold text-gray-900 mb-3">Skills</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {user.skills ? user.skills.split(",").map((skill, i) => (
-                      <span key={i} className="px-3 py-1.5 rounded-full bg-gray-50 border border-gray-200 text-sm font-medium hover:bg-gray-100 transition-colors duration-200">
-                        {skill.trim()}
-                      </span>
-                    )) : <span className="text-sm text-gray-400 italic">No skills listed</span>}
-                  </div>
-                </div>
-
-                <div className="space-y-3 mb-6 text-left">
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50">
-                    <div className="p-2 bg-gradient-to-r from-blue-500 to-cyan-400 rounded-lg"><FaEnvelope className="text-white text-sm" /></div>
-                    <div><p className="text-xs text-gray-500">Email</p><p className="font-medium text-sm break-all">{user.email}</p></div>
-                  </div>
-                  {user.phone && (
-                    <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50">
-                      <div className="p-2 bg-gradient-to-r from-green-500 to-emerald-400 rounded-lg"><FaPhone className="text-white text-sm" /></div>
-                      <div><p className="text-xs text-gray-500">Phone</p><p className="font-medium text-sm">{user.phone}</p></div>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50">
-                    <div className="p-2 bg-gradient-to-r from-purple-500 to-pink-400 rounded-lg"><FaGraduationCap className="text-white text-sm" /></div>
-                    <div><p className="text-xs text-gray-500">Education</p><p className="font-medium text-sm">{user.education || "Not specified"}</p></div>
-                  </div>
-                </div>
-
-                {user.website && (
-                  <div className="text-left">
-                    <a href={user.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors duration-200 group">
-                      <div className="p-2 bg-gradient-to-r from-gray-600 to-gray-700 rounded-lg"><FaLink className="text-white text-sm" /></div>
-                      <span className="font-medium text-sm group-hover:text-blue-600 transition-colors duration-200 truncate">{user.website}</span>
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <ProfileSidebar 
+            user={user}
+            isCurrentUser={isCurrentUser}
+            getInitials={getInitials}
+            hasValidProfilePic={hasValidProfilePic}
+            renderFriendButton={renderFriendButton}
+            openAvatarModal={handleOpenAvatarModal}
+            openBasicInfoModal={() => setIsBasicInfoModalOpen(true)}
+            openContactModal={() => setIsContactModalOpen(true)}
+            openSkillsModal={() => setIsSkillsModalOpen(true)}
+            openDetailsModal={() => setIsDetailsModalOpen(true)}
+          />
 
           {/* =======================
-              RIGHT CONTENT (Posts)
+              RIGHT CONTENT (Feed & Posts)
              ======================= */}
-          <div className="w-full md:w-3/5 h-auto md:h-[calc(100vh-4rem)] md:overflow-y-auto no-scrollbar pb-6">
-            
-            {/* 🆕 ASK HELP CARD UPDATE: 
-                Render for everyone, but pass isOwner. 
-                AskHelpCard must handle logic to hide edit buttons if !isOwner. 
-            */}
+          <div className="flex-1 w-full md:w-auto h-auto md:h-[calc(100vh-4rem)] md:overflow-y-auto no-scrollbar py-8 px-4 lg:px-8 max-w-4xl mx-auto">
+             
              <div className="mb-8">
-                <AskHelpCard 
-                  user={user} 
-                  isOwner={isCurrentUser} 
-                  onRefresh={fetchUserData} 
-                />
+                {/* Note: I removed onRefresh here, as AskHelpCard should ideally use React Query itself to refetch data! */}
+                <AskHelpCard user={user} isOwner={isCurrentUser} />
              </div>
             
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                {isCurrentUser ? "Your Posts" : `${user.full_name}'s Posts`}
+             <div className="mb-6 border-b border-slate-200 pb-4">
+              <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                {isCurrentUser ? "Your Activity" : `Activity`}
               </h2>
-              <p className="text-gray-500">
+              <p className="text-sm font-medium text-slate-500 mt-1">
                 {isCurrentUser 
-                  ? "Share your thoughts, ideas, and updates with your friends."
+                  ? "Share your thoughts, ideas, and updates with your network."
                   : `See what ${user.full_name} has been sharing lately.`
                 }
               </p>
             </div>
 
-            {/* Posts Container */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
-              <div className="border-b border-gray-200 overflow-x-auto">
-                <div className="flex min-w-max">
-                  {['posts'].map((tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className={`px-6 py-4 font-medium text-sm uppercase tracking-wider transition-all duration-300 ${
-                        activeTab === tab
-                          ? 'text-indigo-600 border-b-2 border-indigo-500'
-                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="p-4 md:p-6">
-                <UserPosts
-                  userId={userId}
-                  isCurrentUser={isCurrentUser}
-                />
-              </div>
+            <div className="mb-10 space-y-6">
+              <UserPosts userId={userId} isCurrentUser={isCurrentUser} />
             </div>
             
-            {/* Recent Interactions (Optional) */}
             {user.recent_interactions && user.recent_interactions.length > 0 && (
-              <div className="mt-6 bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-                <h3 className="text-xl font-bold text-gray-900 mb-6">Recent Interactions</h3>
-                <div className="space-y-4">
+              <div className="mt-8 border-t border-slate-200 pt-8">
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Recent Interactions</h3>
+                <div className="space-y-3">
                   {user.recent_interactions.map((interaction, index) => (
-                    <div key={index} className="flex items-center gap-4 p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors duration-200 cursor-pointer">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold">
+                    <div key={index} className="flex items-center gap-4 p-4 rounded-2xl bg-white border border-slate-200 hover:border-indigo-200 hover:shadow-sm transition-all duration-200 cursor-pointer">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-black text-sm">
                         {interaction.initials}
                       </div>
                       <div className="flex-1">
-                        <p className="font-medium">{interaction.name}</p>
-                        <p className="text-sm text-gray-500">{interaction.action}</p>
+                        <p className="font-bold text-slate-900 text-sm">{interaction.name}</p>
+                        <p className="text-xs text-slate-500 font-medium">{interaction.action}</p>
                       </div>
-                      <span className="text-sm text-gray-400">{interaction.time}</span>
+                      <span className="text-[10px] font-bold text-slate-400">{interaction.time}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
+
           </div>
         </div>
       </div>
+
+      {/* ========================================================= */}
+      {/* 🟢 MODALS PORTALS */}
+      {/* ========================================================= */}
+
+      {/* 1. Avatar Modal */}
+      {isAvatarModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center p-5 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800">Profile Picture</h3>
+              <button onClick={() => setIsAvatarModalOpen(false)} className="text-slate-400 hover:text-slate-700"><X size={20}/></button>
+            </div>
+            <div className="p-8 flex flex-col items-center">
+              <div className="w-48 h-48 rounded-3xl border-4 border-slate-100 shadow-inner overflow-hidden mb-8 bg-indigo-50 flex items-center justify-center">
+                {/* 🟢 SMART INITIALS CHECK */}
+                {hasValidProfilePic(tempAvatarPreview) ? (
+                  <img src={tempAvatarPreview} alt="DP" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-7xl font-black text-indigo-300">{getInitials(user.full_name)}</span>
+                )}
+              </div>
+              <div className="flex gap-3 w-full mb-4">
+                <label className="flex-1 py-3 bg-indigo-50 text-indigo-700 font-bold rounded-xl text-center cursor-pointer hover:bg-indigo-100 transition">
+                  Change DP
+                  <input type="file" className="hidden" accept="image/*" onChange={handleAvatarFileSelect} disabled={isProcessing}/>
+                </label>
+                <button onClick={handleAvatarRemovePreview} disabled={isProcessing} className="flex-1 py-3 bg-rose-50 text-rose-600 font-bold rounded-xl hover:bg-rose-100 transition flex items-center justify-center gap-2">
+                  <FaTrash className="text-sm"/> Remove
+                </button>
+              </div>
+              <button onClick={saveAvatarChanges} disabled={isProcessing || (!tempAvatarFile && !isAvatarRemoved)} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition shadow-md shadow-indigo-200 disabled:opacity-50">
+                {isProcessing ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Basic Info Modal */}
+      {isBasicInfoModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center p-5 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800">Edit Basic Info</h3>
+              <button onClick={() => setIsBasicInfoModalOpen(false)} className="text-slate-400 hover:text-slate-700"><X size={20}/></button>
+            </div>
+            <form onSubmit={submitProfileUpdate} className="p-6 space-y-4 overflow-visible">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Full Name</label>
+                <input type="text" name="full_name" value={editForm.full_name} onChange={handleEditChange} className="w-full border border-slate-200 rounded-xl px-4 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none" required />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">About</label>
+                <textarea name="description" value={editForm.description} onChange={handleEditChange} className="w-full border border-slate-200 rounded-xl px-4 py-3 h-28 resize-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none" placeholder="Write a short bio..." />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Location</label>
+                <CreatableSelect
+                  options={LOCATION_OPTIONS}
+                  styles={customSelectStyles}
+                  placeholder="Select or type your location..."
+                  value={editForm.location ? { label: editForm.location, value: editForm.location } : null}
+                  onChange={(selected) => setEditForm({ ...editForm, location: selected ? selected.value : '' })}
+                  isClearable
+                  menuPortalTarget={document.body}
+                  menuPosition="fixed" 
+                />
+              </div>
+              
+              <button type="submit" disabled={isProcessing} className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition shadow-md shadow-indigo-200 disabled:opacity-70">
+                {isProcessing ? "Saving..." : "Save Changes"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Skills Modal */}
+      {isSkillsModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-visible animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center p-5 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800">Edit Skills</h3>
+              <button onClick={() => setIsSkillsModalOpen(false)} className="text-slate-400 hover:text-slate-700"><X size={20}/></button>
+            </div>
+            <form onSubmit={submitProfileUpdate} className="p-6 space-y-4 overflow-visible">
+              
+              <div className="mb-24"> 
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Skills</label>
+                <CreatableSelect
+                  isMulti
+                  options={SKILL_OPTIONS}
+                  styles={customSelectStyles}
+                  placeholder="Select or type to add skills..."
+                  value={editForm.skills ? editForm.skills.split(',').filter(Boolean).map(s => ({ label: s.trim(), value: s.trim() })) : []}
+                  onChange={(selected) => setEditForm({ ...editForm, skills: selected ? selected.map(s => s.value).join(', ') : '' })}
+                  menuPortalTarget={document.body}
+                  menuPosition="fixed"
+                />
+              </div>
+              
+              <button type="submit" disabled={isProcessing} className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition shadow-md shadow-indigo-200 disabled:opacity-70">
+                {isProcessing ? "Saving..." : "Save Changes"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Details Modal */}
+      {isDetailsModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-visible animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center p-5 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800">Edit Details</h3>
+              <button onClick={() => setIsDetailsModalOpen(false)} className="text-slate-400 hover:text-slate-700"><X size={20}/></button>
+            </div>
+            <form onSubmit={submitProfileUpdate} className="p-6 space-y-4 overflow-visible">
+              
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Education</label>
+                <CreatableSelect
+                  options={EDUCATION_OPTIONS}
+                  styles={customSelectStyles}
+                  placeholder="Select or type your institution..."
+                  value={editForm.education ? { label: editForm.education, value: editForm.education } : null}
+                  onChange={(selected) => setEditForm({ ...editForm, education: selected ? selected.value : '' })}
+                  isClearable
+                  menuPortalTarget={document.body}
+                  menuPosition="fixed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Website URL</label>
+                <input type="url" name="website" value={editForm.website} onChange={handleEditChange} className="w-full border border-slate-200 rounded-xl px-4 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none" placeholder="https://yourwebsite.com" />
+              </div>
+              <button type="submit" disabled={isProcessing} className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition shadow-md shadow-indigo-200 disabled:opacity-70">
+                {isProcessing ? "Saving..." : "Save Changes"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Contact Info Modal */}
+      {isContactModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center p-5 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800">{isEditingContact ? "Edit Contact Info" : `${user.full_name}'s Contact Info`}</h3>
+              <button 
+                onClick={() => { setIsContactModalOpen(false); setIsEditingContact(false); }} 
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <X size={20}/>
+              </button>
+            </div>
+            
+            {isEditingContact ? (
+              <form onSubmit={(e) => { submitProfileUpdate(e); }} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Email</label>
+                  <input type="email" name="email" value={editForm.email} readOnly className="w-full border border-slate-200 rounded-xl px-4 py-2.5 bg-slate-50 text-slate-500 cursor-not-allowed outline-none" title="Email cannot be changed here" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Mobile Number</label>
+                  <input type="text" name="mobile_no" value={editForm.mobile_no} onChange={handleEditChange} className="w-full border border-slate-200 rounded-xl px-4 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none" />
+                </div>
+                <div className="flex gap-3 mt-4">
+                  <button type="button" onClick={() => setIsEditingContact(false)} className="flex-1 py-3 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Cancel</button>
+                  <button type="submit" disabled={isProcessing} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition shadow-md shadow-indigo-200 disabled:opacity-70">
+                    {isProcessing ? "Saving..." : "Save"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="p-6 space-y-6">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-indigo-50 rounded-xl text-indigo-600"><Mail size={20}/></div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">{user.email}</p>
+                    <p className="text-xs text-slate-500 font-medium">Email Address</p>
+                  </div>
+                </div>
+                {user.mobile_no && (
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-indigo-50 rounded-xl text-indigo-600"><Phone size={20}/></div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">{user.mobile_no}</p>
+                      <p className="text-xs text-slate-500 font-medium">Mobile Number</p>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-indigo-50 rounded-xl text-indigo-600"><MapPin size={20}/></div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">{user.location || "Remote"}</p>
+                    <p className="text-xs text-slate-500 font-medium">Location</p>
+                  </div>
+                </div>
+                
+                {isCurrentUser && (
+                  <button 
+                    onClick={() => setIsEditingContact(true)} 
+                    className="w-full py-3 mt-4 border-2 border-slate-100 text-slate-700 font-bold rounded-xl hover:border-indigo-200 hover:text-indigo-600 transition flex items-center justify-center gap-2"
+                  >
+                    <FaEdit /> Edit Contact Info
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
