@@ -25,7 +25,7 @@
 
 AcadLinker is a next-generation student networking and collaboration platform designed to help students move beyond traditional classroom learning.
 
-The platform brings together **student networking, project collaboration, community-driven problem solving, and AI-powered assistance** into a single ecosystem where learners can discover opportunities, connect with peers, build innovative projects, and accelerate their professional growth.
+The platform brings together **student networking, project collaboration, community-driven problem solving, and AI-powered** into a single ecosystem where learners can discover opportunities, connect with peers, build innovative projects, and accelerate their professional growth.
 
 Whether you're searching for project teammates, seeking technical guidance, or exploring new technologies, AcadLinker helps transform ideas into reality.
 
