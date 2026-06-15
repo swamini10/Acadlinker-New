@@ -54,6 +54,9 @@ AcadLinker addresses these challenges by creating a centralized digital campus w
 
 ---
 
+<img width="832" height="1288" alt="Fig _4 1" src="https://github.com/user-attachments/assets/1245ff6c-d6bc-4245-a3b5-2143dcf55e28" />
+
+---
 ## 🚀 Vision
 
 Our vision is to build a global student ecosystem where learning is collaborative, innovation is accessible, and every student has the opportunity to connect, create, and succeed.
