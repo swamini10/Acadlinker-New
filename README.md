@@ -49,7 +49,7 @@ AcadLinker addresses these challenges by creating a centralized digital campus w
 🤝 **Student Networking**  
 👥 **Smart Team Building**  
 💬 **Community Help Desk**  
-🤖 **AI Academic Assistant**  
+🤖 **AI Assistant**  
 📂 **Project Workspace**
 
 ---
